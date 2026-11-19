@@ -258,6 +258,8 @@ footer{color:var(--muted);font-size:13px;padding:20px 0 40px}
 .emailrow{display:grid;grid-template-columns:160px 1fr;gap:14px;align-items:center;padding:10px 12px;margin:0 0 14px;background:#fbf3ee;border:1px solid #f1d9c8;border-radius:10px;font-size:14px}
 .emailrow a{font-weight:600;color:var(--maroon);word-break:break-all}
 .copybtn{padding:3px 10px;font-size:12px;margin-left:8px}
+.emailacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+button.ibtn{padding:0;cursor:pointer;font:inherit}
 @media (max-width:560px){.emailrow{grid-template-columns:1fr;gap:4px}}
 .err{background:#fde8e8;color:#8a1c1c;padding:12px;border-radius:8px;margin-top:12px}
 </style>
@@ -815,7 +817,7 @@ const TABLE = [
   { label:"Chair(s)", show:()=>has("advisor"), cell:r => advisorsOf(r).map(esc).join("<br>") },
   { label:"Location", show:()=>has("city")||has("country"), cell:r => esc(locText(r)) },
   { label:"Email", show:()=>rows.some(r => r.__email),
-    cell:r => r.__email ? `<a class="ibtn" href="mailto:${esc(r.__email)}" title="${esc(r.__email)}" aria-label="Email ${esc(col(r,"name"))}">${ICON_MAIL}</a>` : "" },
+    cell:r => r.__email ? `<button type="button" class="ibtn" onclick="openProfile(${rows.indexOf(r)}, true)" title="Show email" aria-label="Show email for ${esc(col(r,"name"))}">${ICON_MAIL}</button>` : "" },
   { label:"Links", show:()=>has("linkedin")||has("website")||has("jobProfile"),
     cell:r => `<div class="links">` + LINK_TYPES.filter(([k])=>isUrl(col(r,k)))
       .map(([k,l,icon])=>`<a class="ibtn" href="${esc(col(r,k))}" target="_blank" rel="noopener" title="${l}" aria-label="${l} for ${esc(col(r,"name"))}">${icon}</a>`).join("") + `</div>` },
@@ -836,23 +838,42 @@ function renderTable(){
   $("#prev").disabled = page===0; $("#next").disabled = page>=pages-1;
 }
 
-function openProfile(i){
+function openProfile(i, askEmail){
   const r = rows[i];
   $("#dName").textContent = col(r,"name");
   $("#dBody").innerHTML = "<dl>" + headers.filter(h => String(r[h]??"").trim()).map(h => {
     const v = String(r[h]).trim();
     return `<dt>${esc(h)}</dt><dd>${isUrl(v)?`<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>`:esc(v)}</dd>`;
   }).join("") + "</dl>";
-  /* email: sent with the data only when Code.gs allows it to be shown */
+  /* email: shown only after the visitor confirms this is the person they mean */
   if (r.__email){
+    $("#dBody").insertAdjacentHTML("afterbegin", `<div class="emailrow" id="emailRow"><span class="meta">Email</span><span id="emailVal"></span></div>`);
+    emailStep(r, askEmail ? "confirm" : "ask");
+  }
+  $("#dlg").showModal();
+  $("#dBody").scrollTop = 0;   /* every profile opens at the top, where the email row is */
+  if (askEmail && $("#emailYes")) $("#emailYes").focus({ preventScroll: true });
+}
+/* the email row in a profile: "Show email" -> "Is this the person?" -> the address */
+function emailStep(r, step){
+  const box = $("#emailVal"); if (!box) return;
+  if (step === "ask"){
+    box.innerHTML = `<button type="button" class="btn" id="emailAsk">Show email</button>`;
+    $("#emailAsk").onclick = () => { emailStep(r, "confirm"); $("#emailYes").focus(); };
+  } else if (step === "confirm"){
+    const about = [yearOf(r) ? "PhD " + yearOf(r) : "", [col(r,"role"), col(r,"employer")].filter(Boolean).join(", "), locText(r)].filter(Boolean).join(" \u00b7 ");
+    box.innerHTML = `Is this the person you want to contact?<br><strong>${esc(col(r,"name"))}</strong>${about ? `<br><span class="meta">${esc(about)}</span>` : ""}`
+      + `<div class="emailacts"><button type="button" class="btn primary" id="emailYes">Yes, show email</button><button type="button" class="btn" id="emailNo">Cancel</button></div>`;
+    $("#emailYes").onclick = () => emailStep(r, "show");
+    $("#emailNo").onclick = () => emailStep(r, "ask");
+  } else {
     const email = r.__email;
-    $("#dBody").insertAdjacentHTML("afterbegin", `<div class="emailrow" id="emailRow"><span class="meta">Email</span><span><a href="mailto:${esc(email)}">${esc(email)}</a> <button type="button" class="btn copybtn" id="copyEmail">Copy</button></span></div>`);
+    box.innerHTML = `<a href="mailto:${esc(email)}">${esc(email)}</a> <button type="button" class="btn copybtn" id="copyEmail">Copy</button>`;
     $("#copyEmail").onclick = () => {
       const done = () => { $("#copyEmail").textContent = "Copied"; setTimeout(() => { const b = $("#copyEmail"); if (b) b.textContent = "Copy"; }, 1500); };
       try { navigator.clipboard.writeText(email).then(done, () => fallbackCopy(email, done)); } catch (e) { fallbackCopy(email, done); }
     };
   }
-  $("#dlg").showModal();
 }
 function fallbackCopy(text, done){
   const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select();
