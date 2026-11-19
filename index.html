@@ -98,6 +98,11 @@ const CONFIG = {
   TAB_ORDER: ["Academia", "Industry", "Public sector", "Nonprofit & research", "Other", "Not yet found"],
   ACTIVE_VALUES: ["active", "current"],   /* status words that put someone on the map */
   PAGE_SIZE: 25,
+  /* Alumni profile pop-up: these show first, in this order (names from COLUMNS above).
+     Every other filled-in column is listed under "More details". */
+  PROFILE_MAIN: ["year", "dissertation", "advisor", "advisor2", "committee1", "committee2", "committee3", "committee4", "committee5",
+                 "firstRole", "firstEmployer", "role", "employer", "department", "sector", "status", "city", "state", "country",
+                 "linkedin", "website", "jobProfile"],
   REFRESH_MINUTES: 10,                    /* re-read the sheet while the page is open (0 = off) */
   TITLE: "Alumni overview",
   SUBTITLE: "Explore our PhD alumni, their dissertations, and their careers."
@@ -259,6 +264,9 @@ footer{color:var(--muted);font-size:13px;padding:20px 0 40px}
 .emailrow a{font-weight:600;color:var(--maroon);word-break:break-all}
 .copybtn{padding:3px 10px;font-size:12px;margin-left:8px}
 .emailacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.moredetails{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.moredetails summary{cursor:pointer;color:var(--maroon);font-weight:600;font-size:14px;padding:4px 0}
+.dbody .moredetails dl{margin-top:10px}
 button.ibtn{padding:0;cursor:pointer;font:inherit}
 @media (max-width:560px){.emailrow{grid-template-columns:1fr;gap:4px}}
 .err{background:#fde8e8;color:#8a1c1c;padding:12px;border-radius:8px;margin-top:12px}
@@ -841,10 +849,16 @@ function renderTable(){
 function openProfile(i, askEmail){
   const r = rows[i];
   $("#dName").textContent = col(r,"name");
-  $("#dBody").innerHTML = "<dl>" + headers.filter(h => String(r[h]??"").trim()).map(h => {
-    const v = String(r[h]).trim();
+  /* the important columns first; everything else folded under "More details" */
+  const filled = h => String(r[h] ?? "").trim();
+  const main = [...new Set(CONFIG.PROFILE_MAIN.map(k => header(k)))].filter(h => h && filled(h));
+  const rest = headers.filter(h => filled(h) && !main.includes(h));
+  const list = hs => "<dl>" + hs.map(h => {
+    const v = filled(h);
     return `<dt>${esc(h)}</dt><dd>${isUrl(v)?`<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>`:esc(v)}</dd>`;
   }).join("") + "</dl>";
+  $("#dBody").innerHTML = list(main)
+    + (rest.length ? `<details class="moredetails"><summary>More details <span class="meta">(${rest.length})</span></summary>${list(rest)}</details>` : "");
   /* email: shown only after the visitor confirms this is the person they mean */
   if (r.__email){
     $("#dBody").insertAdjacentHTML("afterbegin", `<div class="emailrow" id="emailRow"><span class="meta">Email</span><span id="emailVal"></span></div>`);
